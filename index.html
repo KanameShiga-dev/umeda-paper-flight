@@ -558,7 +558,7 @@ function showResult(clear){
   const line1=clear?`【${ST.name} ${hhmm}】9線すべて突破！ ${'★'.repeat(stars)}${'☆'.repeat(3-stars)}`
     :`【${ST.name} ${hhmm}】${S.passed}/9線突破…「${S.crash}」で終了`;
   const line2=clear?`ど真ん中通過 ${S.perfect}回 ／ ${Math.max(0,S.maxZ).toFixed(1)}m`:`飛行距離 ${Math.max(0,S.maxZ).toFixed(1)}m`;
-  shareText=`${line1}\n${line2}\n\nチャレンジ！梅田ペーパーフライト\n${SHARE_URL}\n\n#梅田ペーパーフライト #阪急無限後退`;
+  shareText=`${line1}\n${line2}\n\nチャレンジ！梅田ペーパーフライト\n${SHARE_URL}\n\n#梅田ペーパーフライト`;
   $('xShare').href='https://twitter.com/intent/tweet?text='+encodeURIComponent(shareText);
   $('copyBtn').textContent='文面をコピー';
   $('result').classList.remove('hide');$('hint').textContent='';
