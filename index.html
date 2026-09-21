@@ -43,6 +43,9 @@ canvas{display:block;width:100%;height:100%;touch-action:none;}
 #board .none{color:#3a3f4a}
 #board .here{box-shadow:inset 0 0 0 1px #ece4cf88}
 @keyframes bl{50%{opacity:.25}}
+#win{margin-top:4px;padding:3px 6px;background:#0b0d12d9;border-radius:3px;font-size:12px;
+  color:#8a93a3;box-shadow:inset 0 0 0 1px #ffffff14;text-align:center;letter-spacing:.04em}
+#win.now{color:var(--ledg);font-weight:700;animation:bl .5s steps(2) infinite}
 #backBtn{pointer-events:auto;background:#0008;border:0;color:var(--ivory);font:inherit;font-size:12px;font-weight:700;
   padding:5px 9px;border-radius:3px;margin-top:6px;cursor:pointer}
 #toast{position:absolute;left:0;right:0;top:34%;text-align:center;font-weight:900;font-size:24px;
@@ -97,6 +100,7 @@ button.sub{appearance:none;border:0;background:transparent;color:var(--ivory);fo
       <div><div id="prog">0<small> / 9 線</small></div><div id="dist">0.0 m</div></div>
     </div>
     <div id="board" class="led"></div>
+    <div id="win" class="led"></div>
   </div>
   <div id="toast"></div>
   <div id="hint"></div>
@@ -134,19 +138,19 @@ window.addEventListener('resize',resize);resize();
 
 // ================= stages =================
 const STAGES=[
- {name:'始発',time:[5,2],desc:'人影はまばら。停車時間も長い、練習向きの時間帯。',lv:1,
+ {name:'始発',time:[5,2],desc:'人影はまばら。停車時間も長い、練習向きの時間帯。',winPeriod:25,winLen:8,lv:1,
   walk:[0,1],wsp:[0.9,1.3],queue:0,alight:0,dwell:[26,40],empty:[6,10],emptyP:.08,
   tint:'rgba(150,180,230,0.10)',fog:[26,30,40]},
- {name:'昼下がり',time:[13,40],desc:'ほどよい人通り。乗車列ができはじめる。',lv:2,
+ {name:'昼下がり',time:[13,40],desc:'ほどよい人通り。乗車列ができはじめる。',winPeriod:30,winLen:6,lv:2,
   walk:[1,2],wsp:[1.0,1.5],queue:1,alight:1,dwell:[16,26],empty:[6,10],emptyP:.12,
   tint:null,fog:[22,17,18]},
- {name:'終電前',time:[23,52],desc:'駆け込む人。短い停車、空いた線路の落とし穴。',lv:3,
+ {name:'終電前',time:[23,52],desc:'駆け込む人。短い停車、空いた線路の落とし穴。',winPeriod:35,winLen:5,lv:3,
   walk:[1,3],wsp:[1.8,2.7],queue:1,alight:1,dwell:[8,13],empty:[10,16],emptyP:.35,
   tint:'rgba(8,12,40,0.30)',fog:[10,12,22]},
- {name:'夕ラッシュ',time:[18,12],desc:'帰宅の波。乗車列が伸び、降車客があふれる。',lv:4,
+ {name:'夕ラッシュ',time:[18,12],desc:'帰宅の波。乗車列が伸び、降車客があふれる。',winPeriod:35,winLen:4.5,lv:4,
   walk:[3,4],wsp:[1.1,1.7],queue:2,alight:2,dwell:[10,16],empty:[5,8],emptyP:.1,
   tint:'rgba(255,150,70,0.10)',fog:[30,20,16]},
- {name:'朝ラッシュ',time:[8,6],desc:'最難関。人の壁、途切れない降車客、短い停車。',lv:5,
+ {name:'朝ラッシュ',time:[8,6],desc:'最難関。人の壁、途切れない降車客、短い停車。',winPeriod:40,winLen:4,lv:5,
   walk:[5,7],wsp:[1.2,1.9],queue:3,alight:4,dwell:[7,11],empty:[4,6],emptyP:.05,
   tint:'rgba(255,245,220,0.05)',fog:[26,22,20]},
 ];
@@ -174,11 +178,13 @@ function build(){
   seed=(Date.now()%99991)+11;trains=[];plats=[];clockT=0;
   for(let i=0;i<TRACKS;i++){
     const zn=FIRST+i*PER;
-    const tr={i,zn,zf:zn+CAR,hx:i===0?0:(rnd()*2-1)*0.35,ox:0,open:1,state:'open',t:0,dur:0};
+    const tr={i,zn,zf:zn+CAR,hx:i===0?0:(rnd()*2-1)*0.35,ox:0,open:1,state:'open',t:0,dur:0,ph:rnd()*winSlack()};
     if(i>0&&rnd()<ST.emptyP){tr.state='empty';tr.open=0;tr.ox=999;tr.dur=rr(ST.empty)*rnd();}
     else{tr.dur=rr(ST.dwell)*(0.35+rnd()*0.8)+(i<2?4:0);}
     trains.push(tr);
   }
+  for(const tr of trains) // 最初のウィンドウを開始時点から満たすよう初期停車/空線を調整
+    tr.dur=plan(tr,tr.dur,tr.state==='empty'?BLOCK_ARRIVE:BLOCK_DEPART);
   for(let k=0;k<=TRACKS;k++){
     const za=k===0?-8:trains[k-1].zf, zb=k===TRACKS?END_Z:trains[k].zn;
     const p={k,za,zb,walkers:[],queue:[],qT:0,pillar:{x:(k===0?0:trains[Math.min(k,TRACKS-1)].hx)+(rnd()<.5?-1:1)*(2.6+rnd()*1.6),z:(za+zb)/2}};
@@ -207,8 +213,47 @@ function bell(vol){for(let k=0;k<14;k++)tone(k%2?1320:1480,k*0.07,0.06,0.025*vol
 function chime(vol){tone(1046,0,0.35,0.06*vol);tone(784,0.28,0.5,0.06*vol);}
 function nearVol(tr){const d=tr.zn-cam.z;return d<-1||d>40?0:Math.max(0.2,1-d/40);}
 
+// ================= exit window =================
+// 一定周期で「全9線を通過できる時間帯」を必ず作る。ウィンドウ外は従来どおりランダム。
+// TMIN/TMAX は投擲から各線に到達するまでの実測範囲（tools/sim.js が同じ値を読む）。
+const WIN_T0=3.0, WIN_STAGGER=6.0;
+const TMIN=[0.07,0.59,1.11,1.65,2.20,2.76,3.33,3.91,4.51];
+const TMAX=[0.62,1.25,1.93,2.69,3.50,4.39,5.36,6.49,8.09];
+const BLOCK_DEPART=11.73;  // warn 開始 → 車体が x=0 を抜けるまで
+const BLOCK_ARRIVE=7.14;   // arrive 開始 → 扉が通れる開度になるまで
+// 保証区間と発車シーケンスを置いた残りの余裕。線ごとの位相差の幅に使う
+const winSlack=()=>Math.max(0.3,Math.min(WIN_STAGGER,
+  ST.winPeriod-(ST.winLen+TMAX[TRACKS-1]-TMIN[0])-BLOCK_DEPART));
+// 線 i の保証区間のうち [t0,t1] と重なるもの。{s:開始, e:終了} / 重ならなければ null
+function guardHit(i,t0,t1){
+  const P=ST.winPeriod,a=TMIN[i],b=ST.winLen+TMAX[i];let s=1/0,e=-1;
+  for(let k=Math.max(0,Math.floor((t0-WIN_T0-b)/P));k<=Math.ceil((t1-WIN_T0-a)/P);k++){
+    const ws=WIN_T0+k*P;if(ws+a<=t1&&ws+b>=t0){s=Math.min(s,ws+a);e=Math.max(e,ws+b);}}
+  return e<0?null:{s,e};}
+// 停車/空線の長さを決める。保証区間に重なるなら、まず前倒しして保証前に遮断を終える。
+// 前倒しできないときだけ、保証が明けるまで待たせる。
+function plan(tr,dur,block){
+  const h=guardHit(tr.i,clockT+dur,clockT+dur+block);
+  if(!h)return dur;
+  const early=h.s-0.15-block-clockT;
+  if(early>=dur*0.25){ // 9線が同位相で動かないよう前倒し量をばらつかせる
+    const lo=Math.max(dur*0.25,early-6),d=lo+rnd()*(early-lo);
+    if(!guardHit(tr.i,clockT+d,clockT+d+block))return d;}
+  return h.e+0.05+tr.ph-clockT;}
+// 保証。transition 直前にまだ重なっていれば明けるまで待たせる
+function hold(tr,T,block){
+  const h=guardHit(tr.i,clockT,clockT+block);
+  if(!h)return false;
+  tr.dur=T+(h.e-clockT)+0.05+tr.ph;return true;}
+// UI 用。now=投げてよい時間帯か、left=その残り秒 / 次までの秒
+function winInfo(t){const P=ST.winPeriod,L=ST.winLen,k=Math.floor((t-WIN_T0)/P),ws=WIN_T0+k*P;
+  if(k>=0&&t-ws<=L)return{now:true,left:ws+L-t};
+  return{now:false,left:WIN_T0+(k<0?0:k+1)*P-t};}
+
 // ================= trains =================
-function go(tr,st,dur){tr.state=st;tr.t=0;tr.dur=dur;
+function go(tr,st,dur){
+  if(st==='open')dur=plan(tr,dur,BLOCK_DEPART);else if(st==='empty')dur=plan(tr,dur,BLOCK_ARRIVE);
+  tr.state=st;tr.t=0;tr.dur=dur;
   const v=nearVol(tr);
   if(st==='warn'&&v>0)bell(v);
   if(st==='closing'&&v>0)chime(v);
@@ -220,12 +265,12 @@ function go(tr,st,dur){tr.state=st;tr.t=0;tr.dur=dur;
 }
 function updTrain(tr,dt){tr.t+=dt;const T=tr.t,D=tr.dur;
   switch(tr.state){
-    case 'open':if(T>D)go(tr,'warn',2.6);break;
+    case 'open':if(T>D&&!hold(tr,T,BLOCK_DEPART))go(tr,'warn',2.6);break;
     case 'warn':if(T>D)go(tr,'closing',1.1);break;
     case 'closing':tr.open=Math.max(0,1-T/D);if(T>D){tr.open=0;go(tr,'closed',0.9);}break;
     case 'closed':if(T>D)go(tr,'depart',0);break;
     case 'depart':tr.ox=0.5*3.2*T*T;if(tr.ox>100){tr.ox=999;go(tr,'empty',rr(ST.empty));}break;
-    case 'empty':if(T>D)go(tr,'arrive',7);break;
+    case 'empty':if(T>D&&!hold(tr,T,BLOCK_ARRIVE))go(tr,'arrive',7);break;
     case 'arrive':{const u=Math.min(1,T/D);tr.ox=100*(1-u)*(1-u);if(u>=1){tr.ox=0;go(tr,'opening',0.9);}}break;
     case 'opening':tr.open=Math.min(1,T/D);if(T>D){tr.open=1;go(tr,'open',rr(ST.dwell));}break;
   }}
@@ -520,6 +565,10 @@ function hud(){
   for(let i=0;i<TRACKS;i++){const tr=trains[i],l=LBL[tr.state];const c=cells[i];
     const cls=l[0]+(i===S.passed&&S.mode!=='title'?' here':'');if(c.className!==cls)c.className=cls;
     const tx=l[1];if(c.lastChild.textContent!==tx)c.lastChild.textContent=tx;}
+  const wi=winInfo(clockT),wEl=$('win');
+  const wt=wi.now?`今！ 抜け道 あと${wi.left.toFixed(1)}秒`:`次の抜け道まで ${Math.max(0,Math.ceil(wi.left))}秒`;
+  if(wEl.textContent!==wt)wEl.textContent=wt;
+  const wc=wi.now?'led now':'led';if(wEl.className!==wc)wEl.className=wc;
   if(toastT>0){toastT-=1/60;if(toastT<=0)$('toast').style.opacity=0;}
 }
 
@@ -537,7 +586,7 @@ function startStage(i){stageIdx=i;ST=STAGES[i];build();
   cam.x=0;cam.y=1.5;cam.z=-2.4;
   $('title').classList.add('hide');$('result').classList.add('hide');$('hud').classList.remove('hide');
   $('stname').textContent=`${ST.name}　◆${ST.lv}`;
-  $('hint').textContent='長押しで溜めて、離して投げる。扉の開閉を見てタイミングを。';
+  $('hint').textContent='長押しで溜めて、離して投げる。「今！」が出たら9線すべて抜けられる。';
 }
 function toTitle(){S.mode='title';renderStages();$('title').classList.remove('hide');$('result').classList.add('hide');$('hud').classList.add('hide');$('hint').textContent='';}
 function launch(){S.mode='fly';S.charging=false;S.vz=6.5+S.power*8.5;S.vy=0.9+S.power*0.6;S.vx=0;ctrl.cx=ctrl.cy=0;$('hint').textContent='';}
