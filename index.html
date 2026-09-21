@@ -56,6 +56,19 @@ canvas{display:block;width:100%;height:100%;touch-action:none;}
   padding:24px 20px calc(30px + env(safe-area-inset-bottom,0px));
   background:linear-gradient(to top,#140a0cf5 0%,#140a0cd0 55%,#140a0c30 85%,#140a0c00 100%);}
 .panel.hide{display:none}
+#congrats{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  pointer-events:none;overflow:hidden}
+#congrats.hide{display:none}
+#congrats .cg-t{font-size:min(13vw,58px);font-weight:900;letter-spacing:.01em;color:var(--led);text-align:center;
+  text-shadow:0 0 18px #f3a53188,0 3px 0 #8a4a05,0 10px 26px #000a;
+  animation:cgIn .7s cubic-bezier(.2,1.7,.4,1) both,cgGlow 1.4s .7s ease-in-out infinite}
+#congrats .cg-s{margin-top:10px;font-size:15px;font-weight:700;color:var(--ivory);text-shadow:0 2px 8px #000c;
+  animation:cgIn .7s .18s cubic-bezier(.2,1.7,.4,1) both}
+#congrats i{position:absolute;top:-10vh;width:8px;height:14px;border-radius:1px;opacity:.9;
+  animation:cgFall linear forwards}
+@keyframes cgIn{from{opacity:0;transform:scale(.35) rotate(-7deg)}to{opacity:1;transform:none}}
+@keyframes cgGlow{50%{text-shadow:0 0 36px #f3a531cc,0 3px 0 #8a4a05,0 10px 26px #000a}}
+@keyframes cgFall{to{transform:translateY(125vh) rotate(760deg)}}
 .sign{display:inline-block;align-self:flex-start;background:var(--ivory);color:var(--maroon);
   font-weight:900;font-size:12px;padding:4px 10px;border-radius:2px;letter-spacing:.06em;margin-bottom:12px;}
 h1{margin:0 0 6px;font-weight:900;font-size:clamp(26px,7.5vw,40px);line-height:1.15;}
@@ -126,6 +139,8 @@ button.sub{appearance:none;border:0;background:transparent;color:var(--ivory);fo
     <button class="main" id="retryBtn">もう一機</button>
     <button class="sub" id="toSelBtn">ステージ選択へ</button>
   </div>
+
+  <div id="congrats" class="hide"></div>
 </div>
 
 <script>
@@ -157,6 +172,8 @@ const STAGES=[
 let prog={stars:{}};
 try{prog=JSON.parse(localStorage.getItem('umeda9')||'{"stars":{}}');}catch(e){}
 function saveProg(){try{localStorage.setItem('umeda9',JSON.stringify(prog));}catch(e){}}
+const allClear=()=>STAGES.every((s,i)=>(prog.stars[i]||0)>=1);      // 全5ステージをクリア済み
+const allPerfect=()=>STAGES.every((s,i)=>(prog.stars[i]||0)>=3);    // 全5ステージが★3
 const unlocked=i=>i===0||(prog.stars[i-1]||0)>0;
 
 // ================= world constants =================
@@ -465,6 +482,18 @@ function render(time){
 const $=id=>document.getElementById(id);
 const boardEl=$('board');for(let i=0;i<TRACKS;i++){const d=document.createElement('div');d.innerHTML=`${i+1}<i>—</i>`;boardEl.appendChild(d);}
 const LBL={open:['open','開'],warn:['warn','発車'],closing:['shut','閉'],closed:['shut','閉'],depart:['go','発'],empty:['none','空'],arrive:['arr','入線'],opening:['open','開']};
+function congrats(){
+  const el=$('congrats');
+  el.innerHTML='<div class="cg-t">Congratulations!</div><div class="cg-s">全5ステージ制覇</div>';
+  const col=['#f3a531','#7fe07a','#ff5a4a','#ece4cf','#7ab8ff'];
+  for(let k=0;k<44;k++){const q=document.createElement('i');
+    q.style.left=(rnd()*100).toFixed(1)+'%';q.style.background=col[k%col.length];
+    q.style.animationDuration=(1.8+rnd()*1.8).toFixed(2)+'s';
+    q.style.animationDelay=(rnd()*1.2).toFixed(2)+'s';el.appendChild(q);}
+  el.classList.remove('hide');
+  if(sound&&AC)[523,659,784,1046,1318].forEach((f,k)=>tone(f,k*0.13,.55,.07));
+  clearTimeout(congrats.tm);congrats.tm=setTimeout(()=>el.classList.add('hide'),5400);
+}
 let toastT=0;function toast(m){$('toast').textContent=m;$('toast').style.opacity=1;toastT=1.0;}
 
 function updPeople(dt){
@@ -581,21 +610,24 @@ function renderStages(){
       <div class="r"><div class="lv">${'◆'.repeat(s.lv)}<span style="opacity:.25">${'◆'.repeat(5-s.lv)}</span></div><div class="st">${lock?'🔒':st?'★'.repeat(st)+'☆'.repeat(3-st):'—'}</div></div>`;
     if(!lock)row.addEventListener('click',()=>{ac();startStage(i);});el.appendChild(row);});
 }
-function startStage(i){stageIdx=i;ST=STAGES[i];build();
+function startStage(i){stageIdx=i;ST=STAGES[i];$('congrats').classList.add('hide');build();
   Object.assign(S,{mode:'ready',x:0,y:1.2,z:0,vx:0,vy:0,vz:0,bank:0,passed:0,perfect:0,power:0,charging:false,crash:'',crashT:0,maxZ:0});
   cam.x=0;cam.y=1.5;cam.z=-2.4;
   $('title').classList.add('hide');$('result').classList.add('hide');$('hud').classList.remove('hide');
   $('stname').textContent=`${ST.name}　◆${ST.lv}`;
   $('hint').textContent='長押しで溜めて、離して投げる。「今！」が出たら9線すべて抜けられる。';
 }
-function toTitle(){S.mode='title';renderStages();$('title').classList.remove('hide');$('result').classList.add('hide');$('hud').classList.add('hide');$('hint').textContent='';}
+function toTitle(){S.mode='title';$('congrats').classList.add('hide');renderStages();$('title').classList.remove('hide');$('result').classList.add('hide');$('hud').classList.add('hide');$('hint').textContent='';}
 function launch(){S.mode='fly';S.charging=false;S.vz=6.5+S.power*8.5;S.vy=0.9+S.power*0.6;S.vx=0;ctrl.cx=ctrl.cy=0;$('hint').textContent='';}
 function showResult(clear){
   if(S.mode==='result')return;S.mode='result';
   $('resWhy').textContent=clear?'クリア':S.crash;
   $('resNum').textContent=S.passed;
   let stars=0;
+  const wasAll=allClear();
   if(clear){stars=1+(S.perfect>=3?1:0)+(S.perfect>=6?1:0);if(stars>(prog.stars[stageIdx]||0)){prog.stars[stageIdx]=stars;saveProg();}}
+  const isAll=allClear(),isPerf=allPerfect();
+  if(!wasAll&&isAll)congrats();   // 最後の1ステージを埋めて制覇した回だけ
   $('resStars').textContent=clear?'★'.repeat(stars)+'☆'.repeat(3-stars):'';
   const where=S.passed>=TRACKS?'9号線の向こうのホームへ到達':S.passed===0?'1号線の手前で終了':`${S.passed}号線を抜けて ${S.passed+1}号線の手前`;
   $('resSub').textContent=`${where} ・ ${Math.max(0,S.maxZ).toFixed(1)} m`;
@@ -607,7 +639,8 @@ function showResult(clear){
   const line1=clear?`【${ST.name} ${hhmm}】9線すべて突破！ ${'★'.repeat(stars)}${'☆'.repeat(3-stars)}`
     :`【${ST.name} ${hhmm}】${S.passed}/9線突破…「${S.crash}」で終了`;
   const line2=clear?`ど真ん中通過 ${S.perfect}回 ／ ${Math.max(0,S.maxZ).toFixed(1)}m`:`飛行距離 ${Math.max(0,S.maxZ).toFixed(1)}m`;
-  shareText=`${line1}\n${line2}\n\nチャレンジ！梅田ペーパーフライト\n${SHARE_URL}\n\n#梅田ペーパーフライト`;
+  const tags='#梅田ペーパーフライト'+(isPerf?' #完全クリア':isAll?' #全面クリア':'');
+  shareText=`${line1}\n${line2}\n\nチャレンジ！梅田ペーパーフライト\n${SHARE_URL}\n\n${tags}`;
   $('xShare').href='https://twitter.com/intent/tweet?text='+encodeURIComponent(shareText);
   $('copyBtn').textContent='文面をコピー';
   $('result').classList.remove('hide');$('hint').textContent='';
