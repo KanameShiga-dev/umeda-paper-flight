@@ -56,6 +56,8 @@ canvas{display:block;width:100%;height:100%;touch-action:none;}
   padding:24px 20px calc(30px + env(safe-area-inset-bottom,0px));
   background:linear-gradient(to top,#140a0cf5 0%,#140a0cd0 55%,#140a0c30 85%,#140a0c00 100%);}
 .panel.hide{display:none}
+.srow.extra{box-shadow:inset 0 0 0 1px #f3a53155}
+.srow.extra .n{color:var(--led)}
 #congrats{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;
   pointer-events:none;overflow:hidden}
 #congrats.hide{display:none}
@@ -100,6 +102,8 @@ button.sub{appearance:none;border:0;background:transparent;color:var(--ivory);fo
 .share a{background:#f2efe6;color:#111}
 .share button{background:#ffffff14;color:var(--ivory);box-shadow:inset 0 0 0 1px #ffffff30}
 .share svg{width:15px;height:15px}
+#gd{position:absolute;left:12px;bottom:calc(14px + env(safe-area-inset-bottom,0px));z-index:5;background:#0008;border:0;color:var(--ivory);
+  font:inherit;font-size:12px;font-weight:700;padding:6px 10px;border-radius:3px;cursor:pointer;pointer-events:auto;opacity:.85}
 #snd{position:absolute;right:12px;bottom:calc(14px + env(safe-area-inset-bottom,0px));z-index:5;background:#0008;border:0;color:var(--ivory);
   font-size:12px;padding:6px 10px;border-radius:3px;font-family:inherit;font-weight:700;cursor:pointer}
 </style>
@@ -118,6 +122,7 @@ button.sub{appearance:none;border:0;background:transparent;color:var(--ivory);fo
   <div id="toast"></div>
   <div id="hint"></div>
   <button id="snd">♪ ON</button>
+  <button id="gd">🚩 ガイド ON</button>
 
   <div class="panel" id="title">
     <div class="sign">大阪梅田 ／ 1〜9号線</div>
@@ -153,28 +158,42 @@ window.addEventListener('resize',resize);resize();
 
 // ================= stages =================
 const STAGES=[
- {name:'始発',time:[5,2],desc:'人影はまばら。停車時間も長い、練習向きの時間帯。',winPeriod:25,winLen:8,lv:1,
-  walk:[0,1],wsp:[0.9,1.3],queue:0,alight:0,dwell:[26,40],empty:[6,10],emptyP:.08,
+ {name:'始発',time:[5,2],desc:'人影はまばら。停車時間も長い、練習向きの時間帯。',winPeriod:26,winLen:7.5,lv:1,
+  walk:[1,2],wsp:[0.9,1.3],queue:1,alight:0,dwell:[24,38],empty:[6,10],emptyP:.08,
+  hxr:0.55,hxd:0.4,sinkMin:0.45,
   tint:'rgba(150,180,230,0.10)',fog:[26,30,40]},
- {name:'昼下がり',time:[13,40],desc:'ほどよい人通り。乗車列ができはじめる。',winPeriod:30,winLen:6,lv:2,
+ {name:'昼下がり',time:[13,40],desc:'ほどよい人通り。乗車列ができはじめる。',winPeriod:28,winLen:6.5,lv:2,
   walk:[1,2],wsp:[1.0,1.5],queue:1,alight:1,dwell:[16,26],empty:[6,10],emptyP:.12,
+  hxr:0.6,hxd:0.45,sinkMin:0.46,
   tint:null,fog:[22,17,18]},
- {name:'終電前',time:[23,52],desc:'駆け込む人。短い停車、空いた線路の落とし穴。',winPeriod:35,winLen:5,lv:3,
+ {name:'終電前',time:[23,52],desc:'駆け込む人。短い停車、空いた線路の落とし穴。',winPeriod:32,winLen:5.5,lv:3,
   walk:[1,3],wsp:[1.8,2.7],queue:1,alight:1,dwell:[8,13],empty:[10,16],emptyP:.35,
+  hxr:0.75,hxd:0.55,sinkMin:0.48,
   tint:'rgba(8,12,40,0.30)',fog:[10,12,22]},
- {name:'夕ラッシュ',time:[18,12],desc:'帰宅の波。乗車列が伸び、降車客があふれる。',winPeriod:35,winLen:4.5,lv:4,
-  walk:[3,4],wsp:[1.1,1.7],queue:2,alight:2,dwell:[10,16],empty:[5,8],emptyP:.1,
+ {name:'夕ラッシュ',time:[18,12],desc:'帰宅の波。乗車列が伸び、降車客があふれる。',winPeriod:32,winLen:5,lv:4,
+  walk:[3,5],wsp:[1.1,1.7],queue:2,alight:2,dwell:[10,16],empty:[5,8],emptyP:.1,
+  hxr:0.85,hxd:0.62,sinkMin:0.5,
   tint:'rgba(255,150,70,0.10)',fog:[30,20,16]},
- {name:'朝ラッシュ',time:[8,6],desc:'最難関。人の壁、途切れない降車客、短い停車。',winPeriod:40,winLen:4,lv:5,
+ {name:'朝ラッシュ',time:[8,6],desc:'人の壁、途切れない降車客、短い停車。',winPeriod:35,winLen:4.5,lv:5,
   walk:[5,7],wsp:[1.2,1.9],queue:3,alight:4,dwell:[7,11],empty:[4,6],emptyP:.05,
+  hxr:1.0,hxd:0.7,sinkMin:0.52,
   tint:'rgba(255,245,220,0.05)',fog:[26,22,20]},
+ {name:'繁忙期',time:[17,45],desc:'EXTRA。帰省の大荷物と臨時列車。停車位置も揃わない。',winPeriod:38,winLen:4,lv:6,extra:true,
+  walk:[6,8],wsp:[1.0,2.2],queue:4,alight:5,dwell:[6,10],empty:[4,6],emptyP:.08,
+  hxr:1.15,hxd:0.8,sinkMin:0.55,
+  tint:'rgba(255,120,60,0.12)',fog:[34,22,18]},
 ];
+const BASE=STAGES.filter(s=>!s.extra).length;   // 通常ステージ数（繁忙期を除く）
+const LVMAX=Math.max(...STAGES.map(s=>s.lv));   // 難易度表示の段階数
+
 let prog={stars:{}};
 try{prog=JSON.parse(localStorage.getItem('umeda9')||'{"stars":{}}');}catch(e){}
 function saveProg(){try{localStorage.setItem('umeda9',JSON.stringify(prog));}catch(e){}}
-const allClear=()=>STAGES.every((s,i)=>(prog.stars[i]||0)>=1);      // 全5ステージをクリア済み
-const allPerfect=()=>STAGES.every((s,i)=>(prog.stars[i]||0)>=3);    // 全5ステージが★3
-const unlocked=i=>i===0||(prog.stars[i-1]||0)>0;
+if(prog.guide===undefined)prog.guide=true;   // 「今！」ガイドの表示。既定は表示
+const allClear=()=>STAGES.slice(0,BASE).every((s,i)=>(prog.stars[i]||0)>=1);    // 通常ステージを全部クリア
+const allPerfect=()=>STAGES.slice(0,BASE).every((s,i)=>(prog.stars[i]||0)>=3);  // 通常ステージが全部★3
+// 繁忙期は通常ステージを全クリアすると解放
+const unlocked=i=>STAGES[i].extra?allClear():(i===0||(prog.stars[i-1]||0)>0);
 
 // ================= world constants =================
 const TRACKS=9,CAR=2.8,PLAT=4.8,PER=CAR+PLAT,FIRST=4.0;
@@ -195,7 +214,9 @@ function build(){
   seed=(Date.now()%99991)+11;trains=[];plats=[];clockT=0;
   for(let i=0;i<TRACKS;i++){
     const zn=FIRST+i*PER;
-    const tr={i,zn,zf:zn+CAR,hx:i===0?0:(rnd()*2-1)*0.35,ox:0,open:1,state:'open',t:0,dur:0,ph:rnd()*winSlack()};
+    const px=i===0?0:trains[i-1].hx;                     // 直前の線からの差を hxd 以内に抑える
+    const lo=Math.max(-ST.hxr,px-ST.hxd), hi=Math.min(ST.hxr,px+ST.hxd);
+    const tr={i,zn,zf:zn+CAR,hx:i===0?0:lo+rnd()*(hi-lo),ox:0,open:1,state:'open',t:0,dur:0,ph:rnd()*winSlack()};
     if(i>0&&rnd()<ST.emptyP){tr.state='empty';tr.open=0;tr.ox=999;tr.dur=rr(ST.empty)*rnd();}
     else{tr.dur=rr(ST.dwell)*(0.35+rnd()*0.8)+(i<2?4:0);}
     trains.push(tr);
@@ -234,8 +255,8 @@ function nearVol(tr){const d=tr.zn-cam.z;return d<-1||d>40?0:Math.max(0.2,1-d/40
 // 一定周期で「全9線を通過できる時間帯」を必ず作る。ウィンドウ外は従来どおりランダム。
 // TMIN/TMAX は投擲から各線に到達するまでの実測範囲（tools/sim.js が同じ値を読む）。
 const WIN_T0=3.0, WIN_STAGGER=6.0;
-const TMIN=[0.07,0.59,1.11,1.65,2.20,2.76,3.33,3.91,4.51];
-const TMAX=[0.62,1.25,1.93,2.69,3.50,4.39,5.36,6.49,8.09];
+const TMIN=[0.07,0.59,1.11,1.65,2.20,2.76,3.33,3.93,4.54];
+const TMAX=[0.64,1.29,1.96,2.66,3.39,4.17,4.99,5.88,6.85];
 const BLOCK_DEPART=11.73;  // warn 開始 → 車体が x=0 を抜けるまで
 const BLOCK_ARRIVE=7.14;   // arrive 開始 → 扉が通れる開度になるまで
 // 保証区間と発車シーケンスを置いた残りの余裕。線ごとの位相差の幅に使う
@@ -484,7 +505,7 @@ const boardEl=$('board');for(let i=0;i<TRACKS;i++){const d=document.createElemen
 const LBL={open:['open','開'],warn:['warn','発車'],closing:['shut','閉'],closed:['shut','閉'],depart:['go','発'],empty:['none','空'],arrive:['arr','入線'],opening:['open','開']};
 function congrats(){
   const el=$('congrats');
-  el.innerHTML='<div class="cg-t">Congratulations!</div><div class="cg-s">全5ステージ制覇</div>';
+  el.innerHTML='<div class="cg-t">Congratulations!</div><div class="cg-s">全'+BASE+'ステージ制覇 ／ EXTRA「繁忙期」解放</div>';
   const col=['#f3a531','#7fe07a','#ff5a4a','#ece4cf','#7ab8ff'];
   for(let k=0;k<44;k++){const q=document.createElement('i');
     q.style.left=(rnd()*100).toFixed(1)+'%';q.style.background=col[k%col.length];
@@ -561,7 +582,7 @@ function step(dt,time){
     const sub=4,h=dt/sub;
     for(let k=0;k<sub&&(S.mode==='fly'||S.mode==='clear');k++){const pz=S.z;
       S.vx+=(cx*2.6-S.vx)*Math.min(1,4*h);
-      const sink=Math.max(0.2,Math.min(3.2,2.2-0.19*S.vz));
+      const sink=Math.max(ST.sinkMin,Math.min(3.2,2.2-0.19*S.vz));
       const vyT=-sink+cy*Math.max(0,S.vz)*0.22;
       S.vy+=(vyT-S.vy)*Math.min(1,2.6*h);
       S.vz-=(0.28+0.0012*S.vz*S.vz)*h+cy*1.2*h+Math.abs(cx)*0.22*h;
@@ -604,10 +625,10 @@ function hud(){
 // ================= flow =================
 function renderStages(){
   const el=$('stages');el.innerHTML='';
-  STAGES.forEach((s,i)=>{const lock=!unlocked(i),st=prog.stars[i]||0;const row=document.createElement('div');row.className='srow'+(lock?' lock':'');
+  STAGES.forEach((s,i)=>{const lock=!unlocked(i),st=prog.stars[i]||0;const row=document.createElement('div');row.className='srow'+(lock?' lock':'')+(s.extra?' extra':'');
     row.innerHTML=`<div class="t">${String(s.time[0]).padStart(2,'0')}:${String(s.time[1]).padStart(2,'0')}</div>
-      <div><div class="n">${s.name}</div><div class="d">${lock?'前の時間帯をクリアすると解放':s.desc}</div></div>
-      <div class="r"><div class="lv">${'◆'.repeat(s.lv)}<span style="opacity:.25">${'◆'.repeat(5-s.lv)}</span></div><div class="st">${lock?'🔒':st?'★'.repeat(st)+'☆'.repeat(3-st):'—'}</div></div>`;
+      <div><div class="n">${s.extra?'EXTRA　'+s.name:s.name}</div><div class="d">${lock?(s.extra?'通常の5つをすべてクリアすると解放':'前の時間帯をクリアすると解放'):s.desc}</div></div>
+      <div class="r"><div class="lv">${'◆'.repeat(s.lv)}<span style="opacity:.25">${'◆'.repeat(Math.max(0,LVMAX-s.lv))}</span></div><div class="st">${lock?'🔒':st?'★'.repeat(st)+'☆'.repeat(3-st):'—'}</div></div>`;
     if(!lock)row.addEventListener('click',()=>{ac();startStage(i);});el.appendChild(row);});
 }
 function startStage(i){stageIdx=i;ST=STAGES[i];$('congrats').classList.add('hide');build();
@@ -655,6 +676,9 @@ $('copyBtn').addEventListener('click',async e=>{e.stopPropagation();let ok=false
 $('toSelBtn').addEventListener('click',e=>{e.stopPropagation();toTitle();});
 $('backBtn').addEventListener('click',e=>{e.stopPropagation();toTitle();});
 $('snd').addEventListener('click',e=>{e.stopPropagation();sound=!sound;$('snd').textContent=sound?'♪ ON':'♪ OFF';ac();});
+function gdLabel(){$('gd').textContent=prog.guide?'🚩 ガイド ON':'🚩 ガイド OFF';$('win').style.display=prog.guide?'':'none';}
+$('gd').addEventListener('click',e=>{e.stopPropagation();prog.guide=!prog.guide;saveProg();gdLabel();});
+gdLabel();
 
 cv.addEventListener('pointerdown',e=>{ac();cv.setPointerCapture&&cv.setPointerCapture(e.pointerId);
   if(S.mode==='ready'){S.charging=true;S.t0=0;S.power=0;return;}
